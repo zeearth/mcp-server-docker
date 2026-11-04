@@ -17,7 +17,9 @@ description: Rules for using the docker MCP tools (docker_list_hosts, docker_lis
   - `docker_get_logs` with a small `tail` (30 to 50). If the cause is not visible, use `since` (for example `10m`) or raise `tail`. The maximum is 2000.
   - `docker_inspect` in its default compact form. Use `full: true` only for a field the compact view does not show, because the output is large.
 - Output can be truncated. A `[truncated: N bytes omitted]` marker means data is missing: say so, and narrow the query rather than concluding from partial output.
-- Environment values whose names look sensitive come back as `***REDACTED***`. Never try to work around that, and never ask for the real values.
+- Secrets in environment values, URLs, commands and logs are masked as `***REDACTED***`. Never try to work around that, and never ask for the real values.
+- Masking is best-effort. If a password, token or key still appears in a result, **do not repeat or quote it**. Tell the user which container and variable leaked it (by name only) and that it should be rotated, since the value is now in this conversation.
+- Call `docker_inspect` only when it answers a question that the listing or the logs cannot (exit code, health, limits, mounts). Do not inspect healthy containers out of curiosity: the output carries their configuration.
 - `docker_stats` is a one-shot snapshot, not a rate. Network counters are cumulative since the container started. `pids` can be 0 on older daemons: do not report it as a finding.
 
 ## Changing things

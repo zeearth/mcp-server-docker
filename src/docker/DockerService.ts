@@ -1,5 +1,6 @@
 import type Docker from "dockerode";
 import { demuxLogs } from "../../toolbox/demuxLogs.js";
+import { redactText } from "../../toolbox/redact.js";
 import { parseSince } from "../../toolbox/since.js";
 import { computeStats, type RawStats } from "../../toolbox/stats.js";
 import { truncateTextWithMarker } from "../../toolbox/truncate.js";
@@ -84,7 +85,7 @@ export class DockerService {
    * Reads container logs, split by stream and capped in size. The end of the logs is kept.
    * @param containerId Container name or id.
    * @param options Line count (default 200, capped at 2000), start time and byte cap per stream.
-   * @returns Demultiplexed logs with a truncation flag.
+   * @returns Demultiplexed logs with a truncation flag. Secrets are masked unless redaction is disabled.
    */
   async getLogs(containerId: string, options: LogsOptions = {}): Promise<LogsResult> {
     const container = this.docker.getContainer(containerId);
@@ -99,8 +100,10 @@ export class DockerService {
     });
     const demuxed = demuxLogs(raw, { tty: info.Config.Tty });
     const limits = { maxBytes: options.maxBytes ?? DEFAULT_MAX_LOG_BYTES, keep: "tail" as const };
-    const stdout = truncateTextWithMarker(demuxed.stdout, limits);
-    const stderr = truncateTextWithMarker(demuxed.stderr, limits);
+    // Logs often print connection strings and tokens: mask them before they leave this layer.
+    const clean = (text: string): string => (this.options.redact ? redactText(text) : text);
+    const stdout = truncateTextWithMarker(clean(demuxed.stdout), limits);
+    const stderr = truncateTextWithMarker(clean(demuxed.stderr), limits);
     return { stdout: stdout.text, stderr: stderr.text, tail, truncated: stdout.truncated || stderr.truncated };
   }
 

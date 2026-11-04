@@ -12,7 +12,7 @@ Built with TypeScript and `dockerode`. It talks to the Docker Engine API directl
 - **Multi-host**: drive several Docker daemons (your machine, a NAS, a server) from one server, each with a name.
 - **Safe by design**: a global `--read-only` flag and a per-host `readOnly` option. Write tools are not even exposed when no host is writable, and every write is checked again in the service layer.
 - **Context-friendly**: logs are demultiplexed and size-capped, `docker_inspect` returns a compact view, and every output is truncated with an explicit marker.
-- **Secrets masked**: environment variables named like `KEY`, `TOKEN`, `PASSWORD`, `SECRET`, `PASS` or `CREDENTIAL` are replaced by `***REDACTED***` (disable with `--no-redact`).
+- **Secrets masked**: values are scanned, not just variable names. Passwords inside connection URLs (`postgres://user:pass@host`), `--password=` arguments, private keys, JWTs, common token formats and long encoded blobs are replaced by `***REDACTED***` in `docker_inspect` (environment, command, labels) and in logs. This is best-effort pattern matching: review output before sharing it. Disable with `--no-redact`.
 - **Short, actionable errors**: no stack traces, and a failing host never breaks the others.
 
 ## 🛠 Tools
@@ -83,10 +83,10 @@ Then point the server at it with `--config` (or the `MCP_DOCKER_CONFIG` environm
 With Claude Code (available in every project):
 
 ```bash
-claude mcp add -s user docker -- npx -y --package=@zeearth/mcp-server-docker mcp-server-docker --config <path>
+claude mcp add -s user docker -- npx -y --package=@zeearth/mcp-server-docker@latest mcp-server-docker --config <path>
 ```
 
-> **Note**: MCP clients start the server from the current project directory. If that directory is itself this package (for example when you work on this repository), `npx -y @zeearth/mcp-server-docker` resolves to the local project and fails with `mcp-server-docker: not found`. The `--package=... mcp-server-docker` form above always downloads the published package and avoids the problem.
+> **Note**: MCP clients start the server from the current project directory. If that directory is itself this package (for example when you work on this repository), `npx -y @zeearth/mcp-server-docker` resolves to the local project and fails with `mcp-server-docker: not found`. The `--package=...@latest mcp-server-docker` form above always downloads the published package and avoids the problem. Keep the `@latest` (or a version): without it, `npx` still resolves the name to the local project.
 
 #### Host options
 
@@ -146,7 +146,7 @@ Giving an AI agent access to a Docker daemon is equivalent to giving it root-lev
 1. Prefer `--read-only`, or `readOnly: true` on every host where lifecycle management is not needed.
 2. Keep the configuration file and SSH keys outside the repository, readable only by you.
 3. For SSH hosts, use a dedicated account with only the permissions it needs.
-4. Redaction only looks at environment variable **names**; review what `docker_inspect` full mode returns before sharing it.
+4. Redaction is best-effort: it recognizes common secret formats, but an unusual format can slip through. Treat any container output as potentially sensitive, and do not paste it into shared places.
 
 ## 📄 License
 

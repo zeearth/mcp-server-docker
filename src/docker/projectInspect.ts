@@ -1,5 +1,5 @@
 import type Docker from "dockerode";
-import { redactEnv } from "../../toolbox/redact.js";
+import { redactDeep, redactEnv, redactValue } from "../../toolbox/redact.js";
 
 /**
  * Normalizes a Docker field that may be a string, an array or missing.
@@ -83,7 +83,9 @@ export function projectInspect(info: Docker.ContainerInspectInfo, redact: boolea
     memoryLimitBytes: info.HostConfig.Memory || undefined,
     restartPolicy: info.HostConfig.RestartPolicy?.Name,
     restartCount: info.RestartCount,
-    command: [...toStringArray(info.Config.Entrypoint), ...toStringArray(info.Config.Cmd)],
+    command: [...toStringArray(info.Config.Entrypoint), ...toStringArray(info.Config.Cmd)].map((arg) =>
+      redact ? redactValue(arg) : arg,
+    ),
     ports: formatPorts(info.NetworkSettings.Ports),
     mounts: (info.Mounts ?? []).map((mount) => ({
       type: mount.Type,
@@ -96,12 +98,12 @@ export function projectInspect(info: Docker.ContainerInspectInfo, redact: boolea
       ipAddress: network.IPAddress,
     })),
     env: redact ? redactEnv(env) : env,
-    labels: info.Config.Labels ?? {},
+    labels: redact ? redactDeep(info.Config.Labels ?? {}) : (info.Config.Labels ?? {}),
   };
 }
 
 /**
- * Returns the complete inspect payload, still masking sensitive environment values.
+ * Returns the complete inspect payload with secrets masked everywhere (environment, command, labels...).
  * @param info Raw inspect payload.
  * @param redact Whether to mask sensitive environment values.
  * @returns A copy of the payload.
@@ -110,5 +112,7 @@ export function fullInspect(info: Docker.ContainerInspectInfo, redact: boolean):
   if (!redact) {
     return { ...info };
   }
-  return { ...info, Config: { ...info.Config, Env: redactEnv(info.Config.Env ?? []) } };
+  const withEnv = { ...info, Config: { ...info.Config, Env: redactEnv(info.Config.Env ?? []) } };
+  // Secrets can also sit in the command, labels, args or health output.
+  return redactDeep(withEnv);
 }

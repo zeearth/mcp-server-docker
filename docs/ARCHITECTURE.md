@@ -100,7 +100,11 @@ Defense in depth, in two places:
 ## Output safety
 
 - Logs and inspect output are truncated by bytes/lines, with an explicit "truncated" marker so the model knows data is missing.
-- Env variables whose name matches `KEY|TOKEN|PASSWORD|SECRET|PASS|CREDENTIAL` have their value replaced by `***REDACTED***`.
+- Redaction works on names **and** values (`toolbox/redact.ts`):
+  - an environment variable whose name suggests a secret (`KEY`, `TOKEN`, `PASSWORD`, `SECRET`, `PASS`, `CREDENTIAL`, `PRIVATE`, `SERVICE_ACCOUNT`, `DSN`, ...) is fully masked;
+  - every value is scanned: passwords inside `scheme://user:password@host` URLs, `--password=...` pairs, private keys, JWTs, well-known token formats and long base64 blobs are masked whatever the variable is called;
+  - it applies to the environment, the command, labels and the full inspect payload, and to logs (text rules only).
+- Redaction is best-effort pattern matching, not a guarantee: a secret in an unusual format can slip through. `--no-redact` disables it.
 - Docker errors (404, unreachable socket, permission denied) are mapped to short actionable messages, never raw stack traces.
 
 ## Layout

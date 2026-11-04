@@ -156,6 +156,57 @@ describe("DockerService reads", () => {
   });
 });
 
+describe("DockerService secret redaction", () => {
+  const FAKE_BLOB = "Zm9v".repeat(60);
+  const leakyInfo = {
+    ...inspectInfo,
+    Config: {
+      ...inspectInfo.Config,
+      Env: [
+        "DATABASE_URL=postgres://app:s3cr3tpw@db:5432/app",
+        "MAIL_URL=smtp://user%40example.com:abcd efgh ijkl mnop@smtp.example.com:587",
+        `FIREBASE_SERVICE_ACCOUNT_JSON_BASE64=${FAKE_BLOB}`,
+        "APP_URL=https://example.com",
+      ],
+      Cmd: ["run", "--db-password=cmdpw999"],
+      Labels: { "app.dsn": "mysql://u:labelpw42@h/db" },
+    },
+  };
+  const secrets = /s3cr3tpw|abcd efgh|Zm9vZm9v|cmdpw999|labelpw42/;
+  // Docker repeats the environment in HostConfig.Env of the full payload.
+  const leakyFull = { ...leakyInfo, HostConfig: { ...leakyInfo.HostConfig, Env: leakyInfo.Config.Env } };
+
+  it("masks secrets in the compact inspect, whatever the variable is called", async () => {
+    const container = { inspect: vi.fn().mockResolvedValue(leakyInfo) };
+    const result = await makeService(container).service.inspect("web");
+    expect(JSON.stringify(result)).not.toMatch(secrets);
+    expect(JSON.stringify(result)).toContain("https://example.com");
+  });
+
+  it("masks secrets in the full inspect too", async () => {
+    const container = { inspect: vi.fn().mockResolvedValue(leakyFull) };
+    const result = await makeService(container).service.inspect("web", { full: true });
+    expect(JSON.stringify(result)).not.toMatch(secrets);
+  });
+
+  it("masks secrets printed in logs", async () => {
+    const line = "connect postgres://app:s3cr3tpw@db:5432/app failed\n";
+    const container = {
+      inspect: vi.fn().mockResolvedValue({ ...inspectInfo, Config: { ...inspectInfo.Config, Tty: true } }),
+      logs: vi.fn().mockResolvedValue(Buffer.from(line)),
+    };
+    const result = await makeService(container).service.getLogs("web");
+    expect(result.stdout).not.toMatch(/s3cr3tpw/);
+    expect(result.stdout).toContain("connect postgres://app:***REDACTED***@db:5432/app failed");
+  });
+
+  it("keeps everything as is when redaction is disabled", async () => {
+    const container = { inspect: vi.fn().mockResolvedValue(leakyInfo) };
+    const result = await makeService(container, { readOnly: false, redact: false }).service.inspect("web");
+    expect(JSON.stringify(result)).toMatch(/s3cr3tpw/);
+  });
+});
+
 describe("DockerService writes", () => {
   it("runs start, stop, restart and remove with the right arguments", async () => {
     const container = {
