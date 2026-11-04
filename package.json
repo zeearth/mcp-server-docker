@@ -2,6 +2,24 @@
   "name": "@zeearth/mcp-server-docker",
   "version": "0.1.0",
   "description": "MCP server to inspect and manage Docker environments from AI assistants",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "docker",
+    "dockerode",
+    "ssh",
+    "ai",
+    "claude"
+  ],
+  "author": "ZeEarth",
+  "homepage": "https://github.com/zeearth/mcp-server-docker#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zeearth/mcp-server-docker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zeearth/mcp-server-docker/issues"
+  },
   "type": "module",
   "license": "MIT",
   "packageManager": "npm@10.9.2",
@@ -14,11 +32,15 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "tsx watch src/index.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "rm -rf dist && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
