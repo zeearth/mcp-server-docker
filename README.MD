@@ -1,6 +1,6 @@
 # 🐳 mcp-server-docker
 
-[![npm version](https://badge.fury.io/js/%40zeearth%2Fmcp-server-docker.svg)](https://badge.fury.io/js/%40zeearth%2Fmcp-server-docker)
+[![npm version](https://img.shields.io/npm/v/@zeearth/mcp-server-docker)](https://www.npmjs.com/package/@zeearth/mcp-server-docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets AI assistants (Claude Code, Cursor, Claude Desktop) inspect and manage Docker environments, on one machine or on several.
