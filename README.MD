@@ -22,7 +22,7 @@ Built with TypeScript and `dockerode`. It talks to the Docker Engine API directl
 | `docker_list_hosts` | read | Configured hosts, URL (no credentials) and read-only flag. No connection is made. |
 | `docker_list_containers` | read | Containers, stopped ones included. Filters: `status`, `name`, `label`. |
 | `docker_get_logs` | read | Last lines of a container (default 200, max 2000), stdout and stderr separated. Supports `since` (`10m`, `2h`, ISO date). |
-| `docker_inspect` | read | Compact view: state, image, ports, mounts, networks, command, env. `full: true` returns everything. |
+| `docker_inspect` | read | Compact view: state (exit code, OOM kill, start error, healthcheck detail), memory limit, image, ports, mounts, networks, command, env. `full: true` returns everything. |
 | `docker_stats` | read | One-shot CPU, memory, network and process snapshot. |
 | `docker_start` | write | Start a container. |
 | `docker_stop` | write | Stop a container (optional `timeoutSeconds`). |
@@ -80,7 +80,13 @@ Then point the server at it with `--config` (or the `MCP_DOCKER_CONFIG` environm
 }
 ```
 
-With Claude Code: `claude mcp add docker -- npx -y @zeearth/mcp-server-docker --config <path>`.
+With Claude Code (available in every project):
+
+```bash
+claude mcp add -s user docker -- npx -y --package=@zeearth/mcp-server-docker mcp-server-docker --config <path>
+```
+
+> **Note**: MCP clients start the server from the current project directory. If that directory is itself this package (for example when you work on this repository), `npx -y @zeearth/mcp-server-docker` resolves to the local project and fails with `mcp-server-docker: not found`. The `--package=... mcp-server-docker` form above always downloads the published package and avoids the problem.
 
 #### Host options
 
@@ -108,6 +114,13 @@ The SSH transport opens a connection, runs `<dockerCommand> system dial-stdio` o
 - **Authentication**: ssh-agent (`SSH_AUTH_SOCK`) and/or `identityFile`.
 - **Host key**: checked strictly against `~/.ssh/known_hosts`. Connect once with the `ssh` command to record a new host; a changed key is refused.
 - **Remote docker**: the user must be allowed to run docker (e.g. `docker` group). Non-interactive SSH sessions often lack docker in `PATH` (Synology: `/usr/local/bin/docker`), hence `dockerCommand`.
+
+## 🧠 Skills
+
+The [skills/](skills/) folder contains two agent skills that teach an assistant how to use these tools well. Copy them to `~/.claude/skills/` (or your project's `.claude/skills/`) to enable them.
+
+- **docker-ops**: host selection, narrow-then-widen reads, and the rules for write actions (explicit host, confirmation, no `force` or `volumes` by default).
+- **docker-triage**: a step-by-step method to find out why a container stopped, restarts or is unhealthy, with an exit-code table.
 
 ## 🏗 Development
 
