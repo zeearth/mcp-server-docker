@@ -58,7 +58,7 @@ Tests: input schemas, conditional registration in read-only mode, mandatory `hos
 2. Test the NAS over `ssh://`. This closes the open point on ssh-agent, `known_hosts` and the absence of a TTY under `npx`. Document the prerequisites.
 3. Wire the server into Claude Code through a config file kept outside the repo.
 
-## Step 6 - Finishing
+## Step 6 - Finishing (done)
 
 - Update the README: new tools, multi-host config, per-host read-only, and the read-only vs `rm` inconsistency.
 - Settle the default projection of `docker_inspect`.

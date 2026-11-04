@@ -3,29 +3,39 @@
 [![npm version](https://badge.fury.io/js/%40zeearth%2Fmcp-server-docker.svg)](https://badge.fury.io/js/%40zeearth%2Fmcp-server-docker)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-A robust and secure [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that allows AI assistants (like Claude Code, Cursor, and Claude Desktop) to inspect and manage Docker environments.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that lets AI assistants (Claude Code, Cursor, Claude Desktop) inspect and manage Docker environments, on one machine or on several.
 
-Built with TypeScript and `dockerode`, it supports local sockets, remote TCP, and SSH connections, bringing your infrastructure context directly into your AI workflows.
+Built with TypeScript and `dockerode`. It talks to the Docker Engine API directly (no `docker` CLI needed locally) over a local socket, TCP/TLS or SSH.
 
 ## ✨ Features
 
-- **Zero-CLI Dependency**: Communicates directly with the Docker Engine API via `dockerode`.
-- **Universal Connectivity**: Connect to local sockets (`/var/run/docker.sock`), remote hosts via TCP (with TLS), or securely via SSH tunnels.
-- **Security First**: Optional `--read-only` flag to strictly prevent any mutation (stop, restart, rm) and only allow observation.
-- **Granular Context**: Exposes logs, container states, and inspection data to LLMs without overflowing their context window.
+- **Multi-host**: drive several Docker daemons (your machine, a NAS, a server) from one server, each with a name.
+- **Safe by design**: a global `--read-only` flag and a per-host `readOnly` option. Write tools are not even exposed when no host is writable, and every write is checked again in the service layer.
+- **Context-friendly**: logs are demultiplexed and size-capped, `docker_inspect` returns a compact view, and every output is truncated with an explicit marker.
+- **Secrets masked**: environment variables named like `KEY`, `TOKEN`, `PASSWORD`, `SECRET`, `PASS` or `CREDENTIAL` are replaced by `***REDACTED***` (disable with `--no-redact`).
+- **Short, actionable errors**: no stack traces, and a failing host never breaks the others.
 
-## 🛠 Available MCP Tools
+## 🛠 Tools
 
-- `docker_list_containers`: List all containers (running and stopped) with filtering capabilities.
-- `docker_get_logs`: Fetch tail logs for a specific container to debug crashes.
-- `docker_inspect`: Retrieve detailed configuration, network, and volume mounts of a container.
-- `docker_restart` / `docker_stop`: Manage container lifecycle (disabled in read-only mode).
+| Tool | Type | Description |
+|---|---|---|
+| `docker_list_hosts` | read | Configured hosts, URL (no credentials) and read-only flag. No connection is made. |
+| `docker_list_containers` | read | Containers, stopped ones included. Filters: `status`, `name`, `label`. |
+| `docker_get_logs` | read | Last lines of a container (default 200, max 2000), stdout and stderr separated. Supports `since` (`10m`, `2h`, ISO date). |
+| `docker_inspect` | read | Compact view: state, image, ports, mounts, networks, command, env. `full: true` returns everything. |
+| `docker_stats` | read | One-shot CPU, memory, network and process snapshot. |
+| `docker_start` | write | Start a container. |
+| `docker_stop` | write | Stop a container (optional `timeoutSeconds`). |
+| `docker_restart` | write | Restart a container. |
+| `docker_rm` | write | Remove one container by name or id. `force` and `volumes` are opt-in. |
+
+Write tools are hidden when every host is read-only. Container references are names or ids, never patterns.
 
 ## 🚀 Quick Start
 
-### Using with Claude Desktop
+### Single host
 
-Add the following to your `claude_desktop_config.json`:
+Without a configuration file, the server uses `DOCKER_HOST` (or the local socket `/var/run/docker.sock`):
 
 ```json
 {
@@ -38,45 +48,89 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
-### Remote Host Configuration (SSH)
+### Several hosts
 
-To connect to a remote server (e.g., a NAS or production server), you can utilize standard Docker environment variables which this server respects automatically:
+Create a JSON file outside your repositories, for example `~/.config/mcp-server-docker/hosts.json`:
 
 ```json
 {
-  "mcpServers": {
-    "docker-remote": {
-      "command": "npx",
-      "args": ["-y", "@zeearth/mcp-server-docker"],
-      "env": {
-        "DOCKER_HOST": "ssh://user@your-server.local"
-      }
+  "defaultHost": "local",
+  "hosts": {
+    "local": { "url": "unix:///var/run/docker.sock" },
+    "nas": {
+      "url": "ssh://user@nas.lan:22",
+      "readOnly": true,
+      "dockerCommand": "/usr/local/bin/docker",
+      "identityFile": "~/.ssh/nas-key"
     }
   }
 }
 ```
 
+Then point the server at it with `--config` (or the `MCP_DOCKER_CONFIG` environment variable):
+
+```json
+{
+  "mcpServers": {
+    "docker": {
+      "command": "npx",
+      "args": ["-y", "@zeearth/mcp-server-docker", "--config", "/home/me/.config/mcp-server-docker/hosts.json"]
+    }
+  }
+}
+```
+
+With Claude Code: `claude mcp add docker -- npx -y @zeearth/mcp-server-docker --config <path>`.
+
+#### Host options
+
+| Field | Applies to | Description |
+|---|---|---|
+| `url` | all | `unix://`, `tcp://`, `http://`, `https://` or `ssh://`. No password in URLs. |
+| `readOnly` | all | Forbid write tools on this host. |
+| `ca`, `cert`, `key` | tcp/https | TLS files, referenced by path (relative paths resolve from the config file). |
+| `dockerCommand` | ssh | Docker binary on the remote machine (default `docker`). |
+| `identityFile` | ssh | Private key file (not passphrase-protected), if the key is not in your ssh-agent. |
+
+#### How the `host` parameter works
+
+Every tool takes a `host` parameter restricted to the configured names.
+
+- With a single host it is optional.
+- With several hosts, read tools use `defaultHost` when it is set.
+- Write tools **always** need an explicit `host` when several are configured, so an action never lands on the wrong machine by omission.
+
+### SSH hosts
+
+The SSH transport opens a connection, runs `<dockerCommand> system dial-stdio` on the remote machine and tunnels the Docker API through it.
+
+- **Port**: put it in the URL (`ssh://user@host:2345`). Your `~/.ssh/config` is not read.
+- **Authentication**: ssh-agent (`SSH_AUTH_SOCK`) and/or `identityFile`.
+- **Host key**: checked strictly against `~/.ssh/known_hosts`. Connect once with the `ssh` command to record a new host; a changed key is refused.
+- **Remote docker**: the user must be allowed to run docker (e.g. `docker` group). Non-interactive SSH sessions often lack docker in `PATH` (Synology: `/usr/local/bin/docker`), hence `dockerCommand`.
+
 ## 🏗 Development
 
-This project embraces a "boring architecture" philosophy: predictable, strongly typed, and reliant on battle-tested libraries rather than hype.
+Everything runs in Docker, so nothing is installed on the host:
 
 ```bash
-# Install dependencies
-npm install
-
-# Build the project
-npm run build
-
-# Run locally in development mode
-npm run dev
+cp .env.example .env            # fill HOST_UID / HOST_GID
+docker compose run --rm --no-deps node npm install
+docker compose run --rm --no-deps node npm test
+docker compose run --rm --no-deps node npm run typecheck
+docker compose run --rm --no-deps node npm run build
 ```
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and [docs/ROADMAP.md](docs/ROADMAP.md) for the implementation plan.
 
 ## 🛡️ Security Considerations
 
-Exposing your Docker socket to an AI agent comes with inherent risks. We strongly recommend:
+Giving an AI agent access to a Docker daemon is equivalent to giving it root-level control of that machine.
 
-1. Always using the `--read-only` flag unless lifecycle management is strictly necessary.
-2. Limiting the SSH user's permissions on the remote host if using `DOCKER_HOST=ssh://...`.
+1. Prefer `--read-only`, or `readOnly: true` on every host where lifecycle management is not needed.
+2. Keep the configuration file and SSH keys outside the repository, readable only by you.
+3. For SSH hosts, use a dedicated account with only the permissions it needs.
+4. Redaction only looks at environment variable **names**; review what `docker_inspect` full mode returns before sharing it.
 
 ## 📄 License
 
