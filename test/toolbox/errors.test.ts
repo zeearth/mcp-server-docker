@@ -46,3 +46,11 @@ describe("describeDockerError", () => {
     expect(describeDockerError(undefined)).toBe("Docker error: undefined.");
   });
 });
+
+describe("describeDockerError (our own errors)", () => {
+  it("returns the message of user-facing errors untouched", () => {
+    const error = new Error('Host "nas" is read-only: docker_stop is not allowed.');
+    error.name = "ReadOnlyError";
+    expect(describeDockerError(error, "nas")).toBe('Host "nas" is read-only: docker_stop is not allowed.');
+  });
+});

@@ -52,3 +52,12 @@ describe("truncateWithMarker", () => {
     expect(truncateWithMarker("abc", { maxBytes: 10 })).toBe("abc");
   });
 });
+
+describe("truncateTextWithMarker", () => {
+  it("returns the flag together with the marked text", async () => {
+    const { truncateTextWithMarker } = await import("../../toolbox/truncate.js");
+    const result = truncateTextWithMarker("abcdef", { maxBytes: 2, keep: "tail" });
+    expect(result.truncated).toBe(true);
+    expect(result.text).toBe("[truncated: 4 bytes omitted]\nef");
+  });
+});

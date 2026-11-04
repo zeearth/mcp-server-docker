@@ -59,12 +59,29 @@ export function truncateText(input: string, options: TruncateOptions = {}): Trun
   return { text: output, truncated: omittedBytes > 0, omittedBytes };
 }
 
-// Adds an explicit marker so the model knows data is missing.
-export function truncateWithMarker(input: string, options: TruncateOptions = {}): string {
+/**
+ * Truncates text like `truncateText`, and adds an explicit marker when data was cut
+ * so the model knows the output is incomplete.
+ * @param input Text to limit.
+ * @param options Byte/line limits and which end to keep.
+ * @returns The (possibly marked) text with the truncation flag and omitted byte count.
+ */
+export function truncateTextWithMarker(input: string, options: TruncateOptions = {}): TruncateResult {
   const result = truncateText(input, options);
   if (!result.truncated) {
-    return result.text;
+    return result;
   }
   const marker = `[truncated: ${result.omittedBytes} bytes omitted]`;
-  return (options.keep ?? "head") === "head" ? `${result.text}\n${marker}` : `${marker}\n${result.text}`;
+  const text = (options.keep ?? "head") === "head" ? `${result.text}\n${marker}` : `${marker}\n${result.text}`;
+  return { ...result, text };
+}
+
+/**
+ * String-only variant of `truncateTextWithMarker`.
+ * @param input Text to limit.
+ * @param options Byte/line limits and which end to keep.
+ * @returns The (possibly marked) text.
+ */
+export function truncateWithMarker(input: string, options: TruncateOptions = {}): string {
+  return truncateTextWithMarker(input, options).text;
 }

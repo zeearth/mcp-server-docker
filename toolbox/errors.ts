@@ -6,12 +6,18 @@ interface ErrorLike {
   json?: { message?: string };
 }
 
+// Errors raised by our own code whose message is already meant for the user.
+const USER_FACING_ERROR_NAMES = new Set(["ReadOnlyError", "UnknownHostError", "HostSelectionError"]);
+
 function firstLine(text: string): string {
   return (text.split("\n")[0] ?? "").trim();
 }
 
 // Turns raw Docker/transport errors into short actionable messages, never a stack trace.
 export function describeDockerError(error: unknown, hostName?: string): string {
+  if (error instanceof Error && USER_FACING_ERROR_NAMES.has(error.name)) {
+    return error.message;
+  }
   const prefix = hostName ? `[${hostName}] ` : "";
   const err = (typeof error === "object" && error !== null ? error : {}) as ErrorLike;
   const raw = err.json?.message ?? err.reason ?? err.message ?? String(error);
