@@ -15,8 +15,19 @@ const inspectInfo = {
   Name: "/web",
   Created: "2026-01-01T00:00:00Z",
   RestartCount: 1,
-  State: { Status: "running", Running: true, ExitCode: 0, StartedAt: "s", FinishedAt: "f", Health: { Status: "healthy" } },
-  HostConfig: { RestartPolicy: { Name: "always" } },
+  State: {
+    Status: "exited",
+    Running: false,
+    Paused: false,
+    Restarting: false,
+    OOMKilled: true,
+    Error: "",
+    ExitCode: 137,
+    StartedAt: "s",
+    FinishedAt: "f",
+    Health: { Status: "unhealthy", FailingStreak: 3, Log: [{ Output: "old\n" }, { Output: "curl: (7) connection refused\n" }] },
+  },
+  HostConfig: { RestartPolicy: { Name: "always" }, Memory: 536870912 },
   Config: { Image: "nginx", Tty: false, Env: ["PATH=/bin", "DB_PASSWORD=hunter2"], Cmd: ["nginx"], Entrypoint: null, Labels: {} },
   NetworkSettings: {
     Ports: { "80/tcp": [{ HostIp: "", HostPort: "8080" }], "443/tcp": null },
@@ -100,6 +111,29 @@ describe("DockerService reads", () => {
       env: ["PATH=/bin", "DB_PASSWORD=***REDACTED***"],
       mounts: [{ readOnly: true }],
     });
+  });
+
+  it("exposes the diagnostic fields: OOM kill, exit code, memory limit and healthcheck detail", async () => {
+    const container = { inspect: vi.fn().mockResolvedValue(inspectInfo) };
+    const result = (await makeService(container).service.inspect("web")) as {
+      state: Record<string, unknown>;
+      memoryLimitBytes: number;
+    };
+    expect(result.state).toMatchObject({
+      exitCode: 137,
+      oomKilled: true,
+      error: undefined,
+      health: { status: "unhealthy", failingStreak: 3, lastOutput: "curl: (7) connection refused" },
+    });
+    expect(result.memoryLimitBytes).toBe(536870912);
+  });
+
+  it("omits the memory limit when Docker reports none and the health when there is no healthcheck", async () => {
+    const info = { ...inspectInfo, HostConfig: { RestartPolicy: { Name: "no" }, Memory: 0 }, State: { ...inspectInfo.State, Health: undefined } };
+    const container = { inspect: vi.fn().mockResolvedValue(info) };
+    const result = (await makeService(container).service.inspect("web")) as { state: Record<string, unknown>; memoryLimitBytes?: number };
+    expect(result.memoryLimitBytes).toBeUndefined();
+    expect(result.state.health).toBeUndefined();
   });
 
   it("keeps the environment when redaction is disabled", async () => {

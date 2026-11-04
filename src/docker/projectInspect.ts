@@ -32,6 +32,25 @@ function formatPorts(ports: Docker.PortMap | undefined): string[] {
   return result;
 }
 
+const MAX_HEALTH_OUTPUT_CHARS = 300;
+
+/**
+ * Summarizes the healthcheck: status, failure streak and the last probe output (shortened).
+ * @param health Docker `State.Health` object, absent when the container has no healthcheck.
+ * @returns A compact object, or undefined without healthcheck.
+ */
+function summarizeHealth(health: Docker.ContainerInspectInfo["State"]["Health"]): Record<string, unknown> | undefined {
+  if (!health) {
+    return undefined;
+  }
+  const lastProbe = health.Log?.[health.Log.length - 1];
+  return {
+    status: health.Status,
+    failingStreak: health.FailingStreak,
+    lastOutput: lastProbe?.Output?.trim().slice(0, MAX_HEALTH_OUTPUT_CHARS),
+  };
+}
+
 /**
  * Builds the reduced view of `docker inspect` returned by default.
  * It keeps what is useful to diagnose a container and drops the noisy rest.
@@ -52,8 +71,16 @@ export function projectInspect(info: Docker.ContainerInspectInfo, redact: boolea
       exitCode: info.State.ExitCode,
       startedAt: info.State.StartedAt,
       finishedAt: info.State.FinishedAt,
-      health: info.State.Health?.Status,
+      paused: info.State.Paused,
+      restarting: info.State.Restarting,
+      // True when the kernel killed the process for exceeding its memory limit.
+      oomKilled: info.State.OOMKilled,
+      // Why Docker could not start the container, when it failed to.
+      error: info.State.Error || undefined,
+      health: summarizeHealth(info.State.Health),
     },
+    // 0 means "no limit" for Docker.
+    memoryLimitBytes: info.HostConfig.Memory || undefined,
     restartPolicy: info.HostConfig.RestartPolicy?.Name,
     restartCount: info.RestartCount,
     command: [...toStringArray(info.Config.Entrypoint), ...toStringArray(info.Config.Cmd)],
