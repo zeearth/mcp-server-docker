@@ -44,8 +44,8 @@ export function describeDockerError(error: unknown, hostName?: string): string {
   if (/authentication methods failed|permission denied \(publickey/i.test(raw)) {
     return `${prefix}SSH authentication failed. Check the key, the ssh-agent and the user in the host URL.`;
   }
-  if (/host key verification failed/i.test(raw)) {
-    return `${prefix}SSH host key verification failed. Add the host to known_hosts first.`;
+  if (/host key verification failed|host denied/i.test(raw)) {
+    return `${prefix}SSH host key verification failed. Connect once with the ssh command to record the host in known_hosts.`;
   }
   if (err.statusCode !== undefined) {
     return `${prefix}Docker error ${err.statusCode}: ${detail}.`;

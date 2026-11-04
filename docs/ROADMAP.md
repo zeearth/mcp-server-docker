@@ -52,7 +52,7 @@ Tests: `DockerService` against a mocked dockerode (filters, limits, read-only re
 
 Tests: input schemas, conditional registration in read-only mode, mandatory `host` rule.
 
-## Step 5 - Real-world integration
+## Step 5 - Real-world integration (done)
 
 1. Optional integration test against the local socket, using a disposable container.
 2. Test the NAS over `ssh://`. This closes the open point on ssh-agent, `known_hosts` and the absence of a TTY under `npx`. Document the prerequisites.

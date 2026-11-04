@@ -32,7 +32,17 @@ export const hostConfigSchema = z.strictObject({
   ca: z.string().optional(),
   cert: z.string().optional(),
   key: z.string().optional(),
+  // Docker binary on the remote machine, for ssh:// hosts only (e.g. "/usr/local/bin/docker").
+  dockerCommand: z
+    .string()
+    .regex(/^[A-Za-z0-9_./-]+$/, "use a binary name or path, without spaces or shell characters")
+    .optional(),
+  // Private key file for ssh:// hosts, when the key is not in the ssh-agent (must not be passphrase-protected).
+  identityFile: z.string().min(1).optional(),
 });
+
+/** Fields that only make sense for ssh:// hosts. */
+const SSH_ONLY_FIELDS = ["dockerCommand", "identityFile"] as const;
 
 export const fileConfigSchema = z
   .strictObject({
@@ -56,6 +66,17 @@ export const fileConfigSchema = z
         path: ["defaultHost"],
         message: `"${value.defaultHost}" is not a configured host`,
       });
+    }
+    for (const [name, host] of Object.entries(value.hosts)) {
+      for (const field of SSH_ONLY_FIELDS) {
+        if (host[field] !== undefined && !host.url.startsWith("ssh://")) {
+          context.addIssue({
+            code: "custom",
+            path: ["hosts", name, field],
+            message: `${field} only applies to ssh:// hosts`,
+          });
+        }
+      }
     }
   });
 

@@ -13,15 +13,10 @@ describe("buildDockerOptions", () => {
     });
   });
 
-  it("builds ssh options with the agent and the default port", () => {
-    const options = buildDockerOptions({ url: "ssh://bob@nas.lan", readOnly: false }, deps);
-    expect(options).toMatchObject({
-      protocol: "ssh",
-      host: "nas.lan",
-      port: 22,
-      username: "bob",
-      sshOptions: { agent: "/tmp/agent.sock" },
-    });
+  it("tunnels ssh hosts through a custom agent on the default port", () => {
+    const options = buildDockerOptions({ url: "ssh://bob@nas.lan", readOnly: false }, deps) as Record<string, unknown>;
+    expect(options).toMatchObject({ protocol: "http", host: "nas.lan", port: 22 });
+    expect(options.agent).toBeDefined();
   });
 
   it("honors an explicit ssh port", () => {

@@ -36,7 +36,17 @@ A JSON file given by `--config <path>` (or `MCP_DOCKER_CONFIG`), validated with 
 
 - Without a config file, a single host named `default` is built from `DOCKER_HOST` (or the local socket), so the simple case keeps working.
 - TLS material is referenced by file path (`ca`, `cert`, `key`), never inlined.
+- `ssh://` hosts accept two extra optional fields: `dockerCommand` (remote docker binary, default `docker`) and `identityFile` (private key file, for keys that are not in the ssh-agent). Paths may start with `~/`.
 - No secret in the file; it lives outside the repo (the user's own config directory).
+
+### SSH hosts
+
+The `ssh://` transport is implemented in `src/docker/sshAgent.ts` (ssh2), not by docker-modem's built-in agent. It runs `<dockerCommand> system dial-stdio` on the remote machine and tunnels the Docker API through it.
+
+- **Port**: write it in the URL (`ssh://user@host:2345`). `~/.ssh/config` is not read, so `Port`, `IdentityFile` and aliases defined there do not apply.
+- **Authentication**: the ssh-agent (`SSH_AUTH_SOCK`) and/or `identityFile`. Passphrase-protected key files are not supported: put those keys in the agent.
+- **Host key**: checked strictly against `~/.ssh/known_hosts` (plain and hashed entries). An unknown or changed key is refused; connect once with the `ssh` command to record it.
+- **Remote docker**: the user must be allowed to run docker (e.g. in the `docker` group). Non-interactive SSH sessions often lack the docker binary in `PATH` (Synology installs it in `/usr/local/bin/docker`): set `dockerCommand` to its full path.
 
 ### Tool behavior
 
@@ -117,5 +127,5 @@ docker-compose.yml  dev environment
 
 ## Open points
 
-- Validate SSH (`ssh://`) through `docker-modem` in a non-TTY `npx` context and document prerequisites (ssh-agent, known_hosts).
+- Validate the SSH transport from an MCP client launched by an editor (the `SSH_AUTH_SOCK` of that process may differ from the shell).
 - Decide the exact default projection of `docker_inspect`.

@@ -66,11 +66,12 @@ export class DockerService {
     const containers = await this.docker.listContainers({ all: true, filters: dockerFilters });
     return containers.map((container) => ({
       id: container.Id.slice(0, SHORT_ID_LENGTH),
-      names: container.Names.map((name) => name.replace(/^\//, "")),
+      names: (container.Names ?? []).map((name) => name.replace(/^\//, "")),
       image: container.Image,
       state: container.State,
       status: container.Status,
-      ports: container.Ports.map((port) =>
+      // Docker sends null (not []) for containers without ports.
+      ports: (container.Ports ?? []).map((port) =>
         port.PublicPort
           ? `${port.IP ?? "0.0.0.0"}:${port.PublicPort}->${port.PrivatePort}/${port.Type}`
           : `${port.PrivatePort}/${port.Type}`,

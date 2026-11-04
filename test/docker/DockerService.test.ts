@@ -53,6 +53,15 @@ describe("DockerService reads", () => {
     expect(result[0]).toMatchObject({ id: "abcdef123456", names: ["web"], ports: ["0.0.0.0:8080->80/tcp", "443/tcp"] });
   });
 
+  it("copes with Docker returning null for ports and names", async () => {
+    const { service, docker } = makeService({});
+    docker.listContainers.mockResolvedValue([
+      { Id: "abcdef1234567890", Names: null, Image: "x", State: "running", Status: "Up", Created: 0, Ports: null },
+    ]);
+    const result = await service.listContainers();
+    expect(result[0]).toMatchObject({ names: [], ports: [] });
+  });
+
   it("returns demultiplexed logs and caps the tail", async () => {
     const container = {
       inspect: vi.fn().mockResolvedValue(inspectInfo),

@@ -81,6 +81,14 @@ describe("loadConfig", () => {
     expect(config.hosts.remote?.ca).toBe("/etc/mcp/certs/ca.pem");
   });
 
+  it("expands ~ and checks the identity file is readable", () => {
+    const json = JSON.stringify({ hosts: { nas: { url: "ssh://u@h", identityFile: "~/.ssh/key" } } });
+    const key = `${process.env.HOME}/.ssh/key`;
+    const config = loadConfig(["--config", "/c.json"], {}, makeDeps({ "/c.json": json }, [key]));
+    expect(config.hosts.nas?.identityFile).toBe(key);
+    expect(() => loadConfig(["--config", "/c.json"], {}, makeDeps({ "/c.json": json }))).toThrow("cannot read identityFile");
+  });
+
   it.each([
     ["unreadable file", {}, "cannot read config file"],
     ["invalid JSON", { "/c.json": "{nope" }, "not valid JSON"],
@@ -90,6 +98,9 @@ describe("loadConfig", () => {
     ["bad scheme", { "/c.json": '{"hosts":{"a":{"url":"ftp://h"}}}' }, "unsupported scheme"],
     ["bad host name", { "/c.json": '{"hosts":{"a b":{"url":"unix:///s"}}}' }, "host names may only use"],
     ["unknown field", { "/c.json": '{"hosts":{"a":{"url":"unix:///s","pwd":"x"}}}' }, "pwd"],
+    ["dockerCommand on a non-ssh host", { "/c.json": '{"hosts":{"a":{"url":"unix:///s","dockerCommand":"docker"}}}' }, "only applies to ssh://"],
+    ["identityFile on a non-ssh host", { "/c.json": '{"hosts":{"a":{"url":"unix:///s","identityFile":"/k"}}}' }, "only applies to ssh://"],
+    ["dockerCommand with shell characters", { "/c.json": '{"hosts":{"a":{"url":"ssh://h","dockerCommand":"docker; rm -rf /"}}}' }, "without spaces"],
     ["unreadable TLS file", { "/c.json": '{"hosts":{"a":{"url":"tcp://h:1","ca":"/nope.pem"}}}' }, "cannot read ca file"],
   ])("rejects %s", (_label, files, message) => {
     expect(() => loadConfig(["--config", "/c.json"], {}, makeDeps(files))).toThrow(message);

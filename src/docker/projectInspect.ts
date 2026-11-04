@@ -58,7 +58,7 @@ export function projectInspect(info: Docker.ContainerInspectInfo, redact: boolea
     restartCount: info.RestartCount,
     command: [...toStringArray(info.Config.Entrypoint), ...toStringArray(info.Config.Cmd)],
     ports: formatPorts(info.NetworkSettings.Ports),
-    mounts: info.Mounts.map((mount) => ({
+    mounts: (info.Mounts ?? []).map((mount) => ({
       type: mount.Type,
       source: mount.Source,
       destination: mount.Destination,

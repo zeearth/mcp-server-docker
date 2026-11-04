@@ -1,4 +1,5 @@
 import { accessSync, constants, readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { ConfigError, parseCliArgs } from "./cli.js";
 import { fileConfigSchema, type AppConfig, type HostConfig } from "./schema.js";
@@ -23,14 +24,23 @@ const defaultDeps: ConfigDeps = {
   },
 };
 
+/**
+ * Expands a leading "~/" to the user's home directory.
+ * @param path Path as written in the config file.
+ * @returns The path with the home directory expanded.
+ */
+function expandHome(path: string): string {
+  return path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
+}
+
 function resolveTlsPaths(host: HostConfig, baseDir: string, deps: ConfigDeps, name: string): HostConfig {
   const resolved = { ...host };
-  for (const field of ["ca", "cert", "key"] as const) {
+  for (const field of ["ca", "cert", "key", "identityFile"] as const) {
     const value = host[field];
     if (value === undefined) {
       continue;
     }
-    const absolute = resolve(baseDir, value);
+    const absolute = resolve(baseDir, expandHome(value));
     if (!deps.canRead(absolute)) {
       throw new ConfigError(`host "${name}": cannot read ${field} file ${absolute}`);
     }

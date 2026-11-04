@@ -34,6 +34,7 @@ describe("describeDockerError", () => {
       "SSH authentication failed",
     );
     expect(describeDockerError(new Error("Host key verification failed."))).toContain("known_hosts");
+    expect(describeDockerError(new Error("Host denied (verification failed)"))).toContain("known_hosts");
   });
 
   it("never leaks a stack trace", () => {

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import Docker from "dockerode";
 import type { HostConfig } from "../config/schema.js";
+import { createSshAgent } from "./sshAgent.js";
 
 /** Side effects needed to build client options, injectable for tests. */
 export interface FactoryDeps {
@@ -37,7 +38,7 @@ function loadTlsMaterial(host: HostConfig, deps: FactoryDeps): Pick<Docker.Docke
 
 /**
  * Translates a configured host into dockerode options.
- * Supports unix sockets, tcp/http, https (TLS from files) and ssh (agent-based authentication).
+ * Supports unix sockets, tcp/http, https (TLS from files) and ssh (ssh-agent, strict known_hosts).
  * @param host Host configuration.
  * @param deps File reader and environment (for SSH_AUTH_SOCK).
  * @returns Options ready to be passed to `new Docker(...)`.
@@ -50,13 +51,18 @@ export function buildDockerOptions(host: HostConfig, deps: FactoryDeps = default
   }
 
   if (parsed.protocol === "ssh:") {
-    return {
-      protocol: "ssh",
+    const sshPort = parsed.port ? Number(parsed.port) : DEFAULT_SSH_PORT;
+    const agent = createSshAgent({
       host: parsed.hostname,
-      port: parsed.port ? Number(parsed.port) : DEFAULT_SSH_PORT,
+      port: sshPort,
       username: decodeURIComponent(parsed.username) || undefined,
-      sshOptions: { agent: deps.env.SSH_AUTH_SOCK, readyTimeout: SSH_READY_TIMEOUT_MS },
-    };
+      agentSocket: deps.env.SSH_AUTH_SOCK,
+      privateKey: host.identityFile ? deps.readFile(host.identityFile) : undefined,
+      readyTimeoutMs: SSH_READY_TIMEOUT_MS,
+      dockerCommand: host.dockerCommand ?? "docker",
+    });
+    // The agent opens the tunnel, so dockerode sees a plain http host. `agent` is missing from the typings.
+    return { protocol: "http", host: parsed.hostname, port: sshPort, agent } as Docker.DockerOptions;
   }
 
   const tls = loadTlsMaterial(host, deps);
