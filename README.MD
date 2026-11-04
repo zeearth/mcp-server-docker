@@ -117,10 +117,13 @@ The SSH transport opens a connection, runs `<dockerCommand> system dial-stdio` o
 
 ## 🧠 Skills
 
-The [skills/](skills/) folder contains two agent skills that teach an assistant how to use these tools well. Copy them to `~/.claude/skills/` (or your project's `.claude/skills/`) to enable them.
+The [skills/](skills/) folder contains agent skills that teach an assistant how to use these tools well. Copy them to `~/.claude/skills/` (or your project's `.claude/skills/`) to enable them.
 
 - **docker-ops**: host selection, narrow-then-widen reads, and the rules for write actions (explicit host, confirmation, no `force` or `volumes` by default).
 - **docker-triage**: a step-by-step method to find out why a container stopped, restarts or is unhealthy, with an exit-code table.
+- **docker-health-report**: a short multi-host report that puts exceptions first and never blocks on an unreachable host.
+- **docker-cleanup**: finds stale stopped containers and removes only an explicitly confirmed list, never with `force` or `volumes` by default.
+- **docker-setup**: writes and debugs the hosts file, with a table mapping each SSH or Docker error to its fix.
 
 ## 🏗 Development
 
