@@ -1,6 +1,6 @@
 {
   "name": "@zeearth/mcp-server-docker",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server to inspect and manage Docker environments from AI assistants",
   "keywords": [
     "mcp",
