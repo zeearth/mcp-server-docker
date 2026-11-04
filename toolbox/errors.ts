@@ -1,0 +1,48 @@
+interface ErrorLike {
+  statusCode?: number;
+  code?: string;
+  message?: string;
+  reason?: string;
+  json?: { message?: string };
+}
+
+function firstLine(text: string): string {
+  return (text.split("\n")[0] ?? "").trim();
+}
+
+// Turns raw Docker/transport errors into short actionable messages, never a stack trace.
+export function describeDockerError(error: unknown, hostName?: string): string {
+  const prefix = hostName ? `[${hostName}] ` : "";
+  const err = (typeof error === "object" && error !== null ? error : {}) as ErrorLike;
+  const raw = err.json?.message ?? err.reason ?? err.message ?? String(error);
+  const detail = firstLine(raw);
+
+  if (err.statusCode === 404) {
+    return `${prefix}Not found: ${detail || "no such object"}.`;
+  }
+  if (err.statusCode === 304) {
+    return `${prefix}Nothing to do: the container is already in the requested state.`;
+  }
+  if (err.statusCode === 409) {
+    return `${prefix}Conflict: ${detail}.`;
+  }
+  if (err.statusCode === 403 || err.code === "EACCES") {
+    return `${prefix}Permission denied by the Docker daemon or socket. Check that the user can access it.`;
+  }
+  if (err.code === "ENOENT" || err.code === "ECONNREFUSED") {
+    return `${prefix}Cannot reach the Docker daemon (${err.code}). Is Docker running and the URL correct?`;
+  }
+  if (err.code === "ETIMEDOUT" || err.code === "ENOTFOUND" || err.code === "EHOSTUNREACH") {
+    return `${prefix}Host unreachable (${err.code}). Check the network and the host name.`;
+  }
+  if (/authentication methods failed|permission denied \(publickey/i.test(raw)) {
+    return `${prefix}SSH authentication failed. Check the key, the ssh-agent and the user in the host URL.`;
+  }
+  if (/host key verification failed/i.test(raw)) {
+    return `${prefix}SSH host key verification failed. Add the host to known_hosts first.`;
+  }
+  if (err.statusCode !== undefined) {
+    return `${prefix}Docker error ${err.statusCode}: ${detail}.`;
+  }
+  return `${prefix}Docker error: ${detail || "unknown error"}.`;
+}
