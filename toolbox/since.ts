@@ -18,7 +18,9 @@ export function parseSince(input: string, nowMs: number = Date.now()): number {
   }
   const parsed = Date.parse(trimmed);
   if (Number.isNaN(parsed)) {
-    throw new Error(`Invalid "since" value "${input}": use a duration like 10m, 2h, 1d or an ISO date.`);
+    const error = new Error(`Invalid "since" value "${input}": use a duration like 10m, 2h, 1d or an ISO date.`);
+    error.name = "InvalidInputError";
+    throw error;
   }
   return Math.floor(parsed / 1000);
 }

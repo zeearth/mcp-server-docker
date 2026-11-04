@@ -7,7 +7,7 @@ interface ErrorLike {
 }
 
 // Errors raised by our own code whose message is already meant for the user.
-const USER_FACING_ERROR_NAMES = new Set(["ReadOnlyError", "UnknownHostError", "HostSelectionError"]);
+const USER_FACING_ERROR_NAMES = new Set(["ReadOnlyError", "UnknownHostError", "HostSelectionError", "InvalidInputError"]);
 
 function firstLine(text: string): string {
   return (text.split("\n")[0] ?? "").trim();

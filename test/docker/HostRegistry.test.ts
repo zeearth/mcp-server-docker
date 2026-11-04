@@ -54,6 +54,15 @@ describe("HostRegistry", () => {
     expect(() => registry.resolveHostName("nope", false)).toThrow("Unknown host");
   });
 
+  it("tells when the host parameter can be omitted", () => {
+    const registry = new HostRegistry(makeConfig(), fakeClient);
+    expect(registry.isHostOptional(false)).toBe(true);
+    expect(registry.isHostOptional(true)).toBe(false);
+    const single = makeConfig({ hosts: { only: { url: "unix:///s", readOnly: false } }, defaultHost: undefined });
+    expect(new HostRegistry(single, fakeClient).isHostOptional(true)).toBe(true);
+    expect(new HostRegistry(makeConfig({ defaultHost: undefined }), fakeClient).isHostOptional(false)).toBe(false);
+  });
+
   describe("resolveHostName", () => {
     it("honors an explicit name", () => {
       expect(new HostRegistry(makeConfig(), fakeClient).resolveHostName("nas", true)).toBe("nas");

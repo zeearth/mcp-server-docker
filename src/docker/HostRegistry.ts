@@ -96,6 +96,15 @@ export class HostRegistry {
   }
 
   /**
+   * Tells whether a tool may omit its `host` parameter, mirroring `resolveHostName`.
+   * @param forWrite True for tools that modify state.
+   * @returns True when a host can always be chosen without the caller naming one.
+   */
+  isHostOptional(forWrite: boolean): boolean {
+    return this.hostNames().length === 1 || (!forWrite && this.defaultHostName() !== undefined);
+  }
+
+  /**
    * Returns the service of a host, creating it on first use.
    * @param name Configured host name.
    * @returns The host's service.
