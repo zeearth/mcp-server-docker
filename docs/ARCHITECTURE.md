@@ -43,6 +43,7 @@ A JSON file given by `--config <path>` (or `MCP_DOCKER_CONFIG`), validated with 
 
 The `ssh://` transport is implemented in `src/docker/sshAgent.ts` (ssh2), not by docker-modem's built-in agent. It runs `<dockerCommand> system dial-stdio` on the remote machine and tunnels the Docker API through it.
 
+- **One connection per host**: all requests share a single SSH connection (`src/docker/sshTunnel.ts`), each one on its own channel (up to 6 at once, since sshd allows 10 sessions by default). It is opened on first use, reopened if it drops, and closed after 60 s without activity. The server process exits as soon as the MCP client disconnects.
 - **Port**: write it in the URL (`ssh://user@host:2345`). `~/.ssh/config` is not read, so `Port`, `IdentityFile` and aliases defined there do not apply.
 - **Authentication**: the ssh-agent (`SSH_AUTH_SOCK`) and/or `identityFile`. Passphrase-protected key files are not supported: put those keys in the agent.
 - **Host key**: checked strictly against `~/.ssh/known_hosts` (plain and hashed entries). An unknown or changed key is refused; connect once with the `ssh` command to record it.

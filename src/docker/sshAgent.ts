@@ -3,6 +3,7 @@ import http from "node:http";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Client, type Algorithms } from "ssh2";
+import { SshTunnel, type SshClientLike } from "./sshTunnel.js";
 import { algorithmsFor, findHostKeys } from "../../toolbox/knownHosts.js";
 
 /** Connection settings of an SSH-tunnelled Docker host. */
@@ -34,49 +35,22 @@ function readDefaultKnownHosts(): string {
 }
 
 /**
- * Creates an HTTP agent that reaches the remote Docker daemon through SSH.
- * It replaces docker-modem's built-in SSH agent for two reasons: the remote docker command is
- * configurable (non-interactive SSH sessions often lack it in PATH, e.g. on Synology), and the
- * server key is checked against known_hosts (strict, like StrictHostKeyChecking=yes).
- * A fresh SSH connection is opened per HTTP connection and closed when the stream ends.
+ * Creates an HTTP agent that reaches the remote Docker daemon through one shared SSH connection.
+ * It replaces docker-modem's built-in SSH agent for three reasons: the remote docker command is
+ * configurable (non-interactive SSH sessions often lack it in PATH, e.g. on Synology), the server
+ * key is checked against known_hosts (strict, like StrictHostKeyChecking=yes), and requests share a
+ * single connection instead of opening one each (see `SshTunnel`).
  * @param options SSH settings.
  * @returns An agent to pass to dockerode.
  */
 export function createSshAgent(options: SshAgentOptions): http.Agent {
-  const agent = new http.Agent();
   const readKnownHosts = options.readKnownHosts ?? readDefaultKnownHosts;
-
-  agent.createConnection = (_requestOptions, callback) => {
-    const trusted = findHostKeys(readKnownHosts(), options.host, options.port);
-    const client = new Client();
-    let settled = false;
-
-    /**
-     * Reports a failure once and closes the SSH connection.
-     * @param error The failure.
-     */
-    const fail = (error: Error): void => {
-      client.end();
-      if (!settled) {
-        settled = true;
-        callback?.(error, undefined as never);
-      }
-    };
-
-    client
-      .once("ready", () => {
-        client.exec(`${options.dockerCommand} system dial-stdio`, (error, stream) => {
-          if (error) {
-            fail(error);
-            return;
-          }
-          settled = true;
-          stream.once("close", () => client.end());
-          callback?.(null, stream as never);
-        });
-      })
-      .once("error", fail)
-      .connect({
+  const tunnel = new SshTunnel({
+    command: `${options.dockerCommand} system dial-stdio`,
+    createClient: () => new Client() as unknown as SshClientLike,
+    connectConfig: () => {
+      const trusted = findHostKeys(readKnownHosts(), options.host, options.port);
+      return {
         host: options.host,
         port: options.port,
         username: options.username,
@@ -86,7 +60,16 @@ export function createSshAgent(options: SshAgentOptions): http.Agent {
         // Offer only key types we already trust; refuse unknown or changed keys.
         algorithms: trusted.length > 0 ? { serverHostKey: algorithmsFor(trusted) as Algorithms["serverHostKey"] } : undefined,
         hostVerifier: (key: Buffer) => trusted.some((entry) => entry.keyBase64 === key.toString("base64")),
-      });
+      };
+    },
+  });
+
+  const agent = new http.Agent();
+  agent.createConnection = (_requestOptions, callback) => {
+    tunnel.open().then(
+      (stream) => callback?.(null, stream as never),
+      (error: unknown) => callback?.(error as Error, undefined as never),
+    );
     return undefined;
   };
   return agent;
